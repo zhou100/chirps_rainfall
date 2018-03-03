@@ -1,5 +1,7 @@
 # set your working directory 
-# setwd ("/Users/yujunzhou/desktop") 
+username <- "zhou100"
+mydir <- paste("/Users/yujunzhou/Google Drive/dataImprove/", username, sep ="")
+setwd (mydir) 
 
 
 library(ggplot2) #Calls: fortify, ggplot
@@ -47,6 +49,7 @@ for (filename in filenames) {
 
 
 ## Unzip all the gz. files in working directory
+
 zip.list <- list.files(getwd(),
                        pattern = "tif.gz$",
                        full.names = TRUE)
@@ -55,11 +58,14 @@ for(zipfile in zip.list) {
   gunzip(zipfile)
 }
 
-## Stack raster layers in a list
-rlist <- list.files(path="/Users/yujunzhou/Google Drive/dataImprove/zhou100/CHIRPS", 
+# 
+rlist <- list.files(path=getwd(), 
                     pattern = "tif$",
                     full.names=TRUE)
-r <- stack(rlist)
+## Stack raster layers in a list
+
+r <- stack(rlist[1:5])
+
 #rlist
 #r
 
@@ -82,6 +88,7 @@ for(i in 1:nlayers(r)) {
   mat.data <-rbind(mat.data, mat)
 }
 
+dim()
 
 colnames(mat.data)<-Zam$Dist_name       # Assign distrcit names 
 write.csv(mat.data,"CHIRPS_Zambia_buffer.csv")
