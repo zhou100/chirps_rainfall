@@ -1,6 +1,6 @@
 
 
-setwd("C:\\Users\\Protensia\\Desktop\\")
+#setwd("C:\\Users\\Protensia\\Desktop\\")
 
 
 library(rgdal)   

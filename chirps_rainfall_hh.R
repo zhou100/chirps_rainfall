@@ -78,13 +78,13 @@ time1 <- proc.time() #start timer
 
 
 mat.data.master <- c()
-for(i in 1:2) {
+for(i in 1:1) {
   #ex <- extract(r[[i]], Zam)
   clip1_zam <- crop(r[[i]], extent(Zam)) #crop to extent of polygon
   clip2_zam <- rasterize(Zam, clip1_zam, mask=TRUE)
   ex <- extract(clip2_zam, Zam)
   #mat <- t(mclapply(ex, FUN = mean,mc.cores = 4)) #multiple core version
-  mat.data <- t(lapply(ex, FUN = mean ))
+  mat.data <- t(lapply(ex, function(x){mean(x,na.rm=TRUE)}  ))
   mat.data.master <-rbind(mat.data.master, mat.data)
 }
 
