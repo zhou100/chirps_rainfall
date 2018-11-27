@@ -1,6 +1,7 @@
 #########################################################################################
 # Script to extract weather data from nc format .
 # Yujun Zhou 10/09/2018
+# updated to global nc, Nov 27 2018
 
 # Goal: extract daily weather data for each district, ready for calculating weather related measures. 
 
@@ -55,14 +56,9 @@ library(rgdal)
 library(sp)      
 library(raster)
 library(gdalUtils)
-library(parallel)
 library(RCurl)
 library(R.utils)
 library(rgeos)
-
-
-library(sp)
-require(rgdal)
 
 ############################################################################################################
 # 1. read in the point shapefile and format it to data frame with lat,lon and district/province names.
@@ -77,10 +73,10 @@ district.point.df= as.data.frame(district.point.shape)  # make the point shapefi
 head(district.point.df)  # view the columns
 
 # select lat and lons, as well as the district/province information; depending on the level of aggregation you want. 
-district.point.df= district.point.df  %>% dplyr::select (xcoord, ycoord,ADM2_PCODE,ADM2_EN) 
+district.point.df= district.point.df  %>% dplyr::select (xcoord, ycoord,ADM2_EN) 
 
 # rename the columns
-colnames(district.point.df)=c("lon","lat","province_code","province_name")
+colnames(district.point.df)=c("lon","lat","province_name")
 
 # add point id
 district.point.df= tibble::rownames_to_column(district.point.df, var = "id")
@@ -108,13 +104,15 @@ district.point.df= tibble::rownames_to_column(district.point.df, var = "id")
 url <-"ftp://ftp.chg.ucsb.edu/pub/org/chg/products/CHIRPS-2.0/global_daily/netcdf/p25/"
 
 filename <- getURL(url, ftp.use.epsv = FALSE, dirlistonly = TRUE)
-filename <- strsplit(filename, "\r\n")
-#filename <- strsplit(filename,"\n") # mac version 
+#filename <- strsplit(filename, "\r\n")
+filename <- strsplit(filename,"\n") # mac version 
 
 filenames <- unlist(filename)
 filenames
+filenames = filenames[-1] # remove the by month folder 
 
-
+# ftp://ftp.chg.ucsb.edu/pub/org/chg/products/CHIRPS-2.0/global_daily/old.netcdf/p25/
+  
 # create a folder for saving the rainfall data, 
 dir.create("data") # comment out if the folder already exists
 dir.create("data/chirps") # comment out if the folder already exists 
@@ -152,7 +150,7 @@ prec_list = list()
  
 
 start.year = 1981
-end.year = 1982
+end.year = 2018
 
 
 for(year in start.year:end.year){
@@ -163,25 +161,23 @@ for(year in start.year:end.year){
   print(paste0("starting_",year,"_prec"))
   start_time <- Sys.time()
   
-  
   # Read in the nc data
-  prec_nc <-nc_open(paste0("data/chirps/nc_global/chirps-v2.0.",year ,".days_p25.nc"))
+  prec_nc <-nc_open(paste0("data/chirps/nc_global/chirps-v2.0.",year,".days_p25.nc"))
 
   # save information into separate data frames 
-  lat_prec <-ncdf4::ncvar_get(prec_nc, varid="lat")
-  lon_prec <- ncdf4::ncvar_get(prec_nc, varid="lon")
+  lat_prec <-ncdf4::ncvar_get(prec_nc, varid="latitude")
+  lon_prec <- ncdf4::ncvar_get(prec_nc, varid="longitude")
   time_prec <-ncdf4::ncvar_get(prec_nc, varid="time")
-  prec_data <- ncdf4::ncvar_get(prec_nc, varid="precipitation")
+  prec_data <- ncdf4::ncvar_get(prec_nc,varid = "precip")
   
-  # dim(prec_data)
-  # head(prec_data)
+  dim(prec_data)
+  head(prec_data)
   
   ##############################################################################
   # loop over the points in each district 
   # for each point in the point data frame, find every day's weather in a given year
   ##############################################################################
   for (i in 1:NROW(district.point.df)){
-
     # save the point coordinates temporarily 
     pt_lon <- district.point.df$lon[i]
     pt_lat <- district.point.df$lat[i]
@@ -192,18 +188,18 @@ for(year in start.year:end.year){
     lat_location = which.min(abs(lat_prec-pt_lat))
     
     # save all the weather data in the given point in the dataframe "windowed_prec"
-    windowed_prec <-data.frame(prec_data[lon_location, lat_location,])
-    names(windowed_prec) <-c("prec")
+    windowed_prec <-as.data.frame(prec_data[lon_location, lat_location,  ])
+    # names(windowed_prec) <-c("prec")
     
     # save the series in a matrix
-    windowed_prec.3hr <-windowed_prec$prec
+    #windowed_prec.daily <-windowed_prec$prec
     
     # reshape the long series into a matrix ( 8 columns for 8 reads in a day, and 365 rows for 365 days) 
-    dim(windowed_prec.3hr)<-c(8,NROW(windowed_prec.3hr)/8) 
+    #dim(windowed_prec.3hr)<-c(8,NROW(windowed_prec.3hr)/8) 
     
-    windowed_prec.daily<- data.frame(colSums(windowed_prec.3hr)) # sum daily precip
+    #windowed_prec.daily<- data.frame(colSums(windowed_prec.3hr)) # sum daily precip
     
-    names(windowed_prec.daily) <- c("prec")
+   # names(windowed_prec.daily) <- c("prec")
 
     if (year==start.year){
       prec_list[[pt_id]] = windowed_prec.daily
@@ -234,14 +230,14 @@ for(year in start.year:end.year){
    # join the original point data frame to have the district information 
    prec.district =  dplyr::inner_join(district.point.df,prec.df.point.transpose,by="id") %>% 
                     
-                    group_by(district) %>%  # aggregate by district
+     dplyr::group_by(province_name) %>%  # aggregate by district
      
-                    select(-id,-lat,-lon) %>% 
+     dplyr::select(-id,-lat,-lon) %>% 
                     
-                    summarise_all(funs(mean(.))) # average of all the points in the same district
+                    summarise_all(funs(mean(.,na.rm=TRUE))) # average of all the points in the same district
    
    # reshape and ready for join 
-   district.names <- as.character(prec.district$district)
+   district.names <- as.character(prec.district$province_name)
    prec.district.date = as.data.frame(t(prec.district[,-1]))
    rownames(prec.district.date) <- NULL
    colnames(prec.district.date) <- district.names
@@ -252,14 +248,12 @@ for(year in start.year:end.year){
    # Formatting the date variable and add as a column into the extracted weather data
    ##############################################################################
    # reshape the long series into a matrix ( 8 columns for 8 reads in a day, and 365 rows for 365 days) 
-   date.3hr = time_prec
-   dim(date.3hr)<-c(8,NROW(date.3hr)/8) 
-   date.day = date.3hr[1,]
+   date.day= time_prec
    # format the date into days 
    # [1] "days since 1900-1-1 00:00:00"
 
    
-   date.day =  as.Date( date.day,origin = "1900-01-01")
+   date.day =  as.Date( date.day,origin = "1980-01-01")
    
    # save the date into the 
    prec.district.date$date = date.day
@@ -283,45 +277,54 @@ for(year in start.year:end.year){
 
 
 # reorder to make date as the first column
-extracted.prec = extracted.prec %>% select(date,everything())
+extracted.prec = extracted.prec %>% dplyr::select(date,everything())
 
 # head(extracted.prec)
 
 # save data and clean the memory 
-save(extracted.prec,file="data/clean/rain_9016.rda")
+dir.create("data/clean")
+save(extracted.prec,file="data/clean/phil_rain_8018.rda")
 prec_data<-NULL
 
 
+
+
+
+############################################################################################################
+# 3. download, process and extract monthly temperature data 1981-2018
+########################################################################################################
+
+dir.create("data/GHCN")
+url <-"ftp://ftp.cdc.noaa.gov/Datasets/ghcncams/air.mon.mean.nc"
+
+# if you prefer udel data, use this link
+# url = "ftp://ftp.cdc.noaa.gov/Datasets/udel.airt.precip/air.mon.mean.v401.nc"
+
+download.file(url,paste(getwd(), "/data/GHCN/","air.mon.mean.nc",sep = ""))
+
+# Read in the nc data
+temp_nc <-nc_open("data/GHCN/air.mon.mean.nc")
+
+#print basic information:
+print(temp_nc) # lon_temp: degrees_east
+#print(prec_nc)  # lon_prec: degrees_east
+
+
+# save information into separate data frames 
+lat_temp <-ncdf4::ncvar_get(temp_nc, varid="lat")
+lon_temp_nc <- ncdf4::ncvar_get(temp_nc, varid="lon")
+time_temp <-ncdf4::ncvar_get(temp_nc, varid="time")
+temp_data <- ncdf4::ncvar_get(temp_nc, varid="air")
+
+# need to transform lons to positive/negativv
+lon_temp = ifelse(lon_temp_nc>180,lon_temp_nc-360,lon_temp_nc )
+
+tmean_list = list()
+
 #################################################################################
-### Extract tmax, tmin data 
+### Extract tmean
 #################################################################################
 
-tmax_list = list()
-tmin_list = list()
-
-# Looping over differnet years. 
-# remember to test for a single year first
-
-start.year = 1990
-end.year = 2016
-
-for(year in start.year:end.year){
-  
-  ##############################################################################
-  # read in the nc weather data for a given year 
-  ##############################################################################
-  print(paste0("starting_",year,"_temp"))
-  start_time <- Sys.time()
-  
-  
-  # Read in the nc data
-  temp_nc <-nc_open(paste0("C://Users//Administrator//Desktop//mswep_temp//tas_",year ,"_5km_zambia.nc"))
-  
-  # save information into separate data frames 
-  lat_temp <-ncdf4::ncvar_get(temp_nc, varid="lat")
-  lon_temp <- ncdf4::ncvar_get(temp_nc, varid="lon")
-  time_temp <-ncdf4::ncvar_get(temp_nc, varid="time")
-  temp_data <- ncdf4::ncvar_get(temp_nc, varid="data")
   
   # dim(temp_data)
   # head(temp_data)
@@ -331,7 +334,7 @@ for(year in start.year:end.year){
   # for each point in the point data frame, find every day's weather in a given year
   ##############################################################################
   for (i in 1:NROW(district.point.df)){
-    #
+
     
     # save the point coordinates temporarily 
     pt_lon <- district.point.df$lon[i]
@@ -343,161 +346,69 @@ for(year in start.year:end.year){
     lat_location = which.min(abs(lat_temp-pt_lat))
     
     # save all the weather data in the given point in the dataframe "windowed_temp"
-    windowed_temp <-data.frame(temp_data[lon_location, lat_location,])
+    windowed_temp <-as.data.frame(temp_data[lon_location, lat_location,])
     names(windowed_temp) <-c("temp")
-    
-    # save the series in a matrix
-    windowed_temp.3hr <-windowed_temp$temp
-    
-    # reshape the long series into a matrix ( 8 columns for 8 reads in a day, and 365 rows for 365 days) 
-    dim(windowed_temp.3hr)<-c(8,NROW(windowed_temp.3hr)/8) 
-    
-    #windowed_temp.daily<- data.frame(colSums(windowed_temp.3hr)) # sum daily precip
+  
+     tmean.C = windowed_temp-273.15
     
     
-    tmax.daily.K <- data.frame(apply(windowed_temp.3hr, 2, function(x) max(x, na.rm = TRUE))) ## find daily max
-    names(tmax.daily.K) <- c("tmax")
-    tmax.daily.C <- tmax.daily.K - 273.15 # convert to C
+     tmean_list[[pt_id]] = tmean.C
     
-    tmin.daily.K <- data.frame(apply(windowed_temp.3hr, 2, function(x) min(x, na.rm = TRUE))) ## find daily min
-    names(tmin.daily.K) <- c("tmin")
-    tmin.daily.C <- tmin.daily.K -273.15 # convert to C
-    
-    
-    
-    
-    if (year==start.year){
-      tmax_list[[pt_id]] = tmax.daily.C
-      tmin_list[[pt_id]] = tmin.daily.C
-      
-    } else {
-      tmax_list[[pt_id]]<- rbind(tmax_list[[pt_id]],tmax.daily.C)
-      tmin_list[[pt_id]]<- rbind(tmin_list[[pt_id]],tmin.daily.C)
-      
-    }
     
   } # for point
   
   ##############################################################################
-  # Formatting the extracted weather data in a given year 
-  # aggregate the points in each district 
+  # Formatting the extracted weather data 
+  # aggregate the points in each district/province 
   ##############################################################################
-  tmax.list.names <- unique(names(tmax_list))
-  tmax.df.point =  data.frame(
+  tmean.list.names <- unique(names(tmean_list))
+  tmean.df.point =  data.frame(
     setNames(
-      lapply(tmax.list.names, function(x) unlist(tmax_list[names(tmax_list) %in% x], 
-                                                 use.names = FALSE)), tmax.list.names))
+      lapply(tmean.list.names, function(x) unlist(tmean_list[names(tmean_list) %in% x], 
+                                                 use.names = FALSE)), tmean.list.names))
   
-  
-  tmax.df.point.transpose= as.data.frame(t(tmax.df.point)) %>%
+
+  tmean.df.point.transpose= as.data.frame(t(tmean.df.point)) %>%
     tibble::rownames_to_column(var = "id")
-  
-  # remove the "X" in the data 
-  tmax.df.point.transpose$id = as.character(as.numeric(as.factor(tmax.df.point.transpose$id)))
-  
+
+  # remove the "X" in the id to help with join
+  tmean.df.point.transpose["id"]= gsub(tmean.df.point.transpose$id,pattern="X",replacement = "")
   
   # join the original point data frame to have the district information 
-  tmax.district =  dplyr::inner_join(district.point.df,tmax.df.point.transpose,by="id") %>% 
+  tmean.district =  dplyr::inner_join(district.point.df,tmean.df.point.transpose,by="id") %>% 
     
-    group_by(district) %>%  # aggregate by district
+    group_by(province_name) %>%  # aggregate by district
     
-    select(-id,-lat,-lon) %>% 
+    dplyr::select(-id,-lat,-lon) %>% 
     
-    summarise_all(funs(mean(.))) # average of all the points in the same district
+    summarise_all(funs(mean(.,na.rm=TRUE))) # average of all the points in the same district
   
   # reshape and ready for join 
-  district.names <- as.character(tmax.district$district)
-  tmax.district.date = as.data.frame(t(tmax.district[,-1]))
-  rownames(tmax.district.date) <- NULL
-  colnames(tmax.district.date) <- district.names
+  district.names <- as.character(tmean.district$province_name)
+  tmean.district.date = as.data.frame(t(tmean.district[,-1]))
+  rownames(tmean.district.date) <- NULL
+  colnames(tmean.district.date) <- district.names
   
   
-  ################################################################################
-  #### Do the same for tmins 
-  ########################################################################
-  tmin.list.names <- unique(names(tmin_list))
-  tmin.df.point =  data.frame(
-    setNames(
-      lapply(tmin.list.names, function(x) unlist(tmin_list[names(tmin_list) %in% x], 
-                                                 use.names = FALSE)), tmin.list.names))
+ 
   
+  # save the date into the data frame
+  time_d <- as.POSIXct(time_temp*3600,origin='1800-01-01 00:00:0.0')
+  date_formatted = as.Date(time_d)
   
-  tmin.df.point.transpose= as.data.frame(t(tmin.df.point)) %>%
-    tibble::rownames_to_column(var = "id")
-  
-  # remove the "X" in the data 
-  tmin.df.point.transpose$id = as.character(as.numeric(as.factor(tmin.df.point.transpose$id)))
-  
-  
-  # join the original point data frame to have the district information 
-  tmin.district =  dplyr::inner_join(district.point.df,tmin.df.point.transpose,by="id") %>% 
-    
-    group_by(district) %>%  # aggregate by district
-    
-    select(-id,-lat,-lon) %>% 
-    
-    summarise_all(funs(mean(.))) # average of all the points in the same district
-  
-  # reshape and ready for join 
-  district.names <- as.character(tmin.district$district)
-  tmin.district.date = as.data.frame(t(tmin.district[,-1]))
-  rownames(tmin.district.date) <- NULL
-  colnames(tmin.district.date) <- district.names
-  
-  
-  ##############################################################################
-  # Formatting the date variable and add as a column into the extracted weather data
-  ##############################################################################
-  # reshape the long series into a matrix ( 8 columns for 8 reads in a day, and 365 rows for 365 days) 
-  # divide by 24 to convert date from hours to days 
-  ## Time unit of the temperature nc file: "hours since 2016-1-1 00:00:00"
-  
-  temp.date.3hr = time_temp/24
-  dim(temp.date.3hr)<-c(8,NROW(temp.date.3hr)/8) 
-  temp.date.day = temp.date.3hr[1,]
-  # format the date into days 
-  
-  
-  ## "hours since 2016-1-1 00:00:00"
-  
-  temp.date.day =  as.Date( temp.date.day,origin = paste(as.character(year),"-01-01",sep=""))
-  
-  # save the date into the 
-  tmin.district.date$date = temp.date.day
-  tmax.district.date$date = temp.date.day
+  tmean.district.date$date = date_formatted
   
   # clean the temporary list 
-  tmax_list = list()
-  tmin_list = list()
+  tmean_list = list()
+  temp_data<-NULL
   
-  
-  # save the data and avoid problems in combing data.
-  if (year==start.year){
-    extracted.tmin = tmin.district.date
-    extracted.tmax = tmax.district.date
-  } else {
-    extracted.tmin = rbind(extracted.tmin,tmin.district.date)
-    extracted.tmax = rbind(extracted.tmax,tmax.district.date)
-    
-  }
-  
-  # counting the processing time 
-  end_time <- Sys.time()
-  print("time for one year is")
-  print(end_time - start_time)
-  
-} # for year
-
 
 # reorder to make date as the first column
-extracted.tmin = extracted.tmin %>% select(date,everything())
-extracted.tmax = extracted.tmax %>% select(date,everything())
+extracted.tmean = tmean.district.date %>% dplyr::select(date,everything())
 
 # head(extracted.prec)
 
 # save data and clean the memory 
-save(extracted.tmin,file="data/clean/tmin_9016.rda")
-save(extracted.tmax,file="data/clean/tmax_9016.rda")
-temp_data<-NULL
+save(extracted.tmean,file="data/clean/tmean_4918.rda")
 
 
