@@ -121,7 +121,7 @@ dir.create("data/chirps/nc_global") # comment out if the folder already exists
 
 for (filename in filenames) {
   download.file(paste(url, filename, sep = ""),
-                paste(getwd(), "/data/chirps/nc_global/", filename, sep = ""))
+                paste(getwd(), "/data/chirps/", filename, sep = ""),method='curl')
 }
 
 # 
@@ -188,7 +188,7 @@ for(year in start.year:end.year){
     lat_location = which.min(abs(lat_prec-pt_lat))
     
     # save all the weather data in the given point in the dataframe "windowed_prec"
-    windowed_prec <-as.data.frame(prec_data[lon_location, lat_location,  ])
+    windowed_prec.daily <-as.data.frame(prec_data[lon_location, lat_location,  ])
     # names(windowed_prec) <-c("prec")
     
     # save the series in a matrix
