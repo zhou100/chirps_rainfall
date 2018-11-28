@@ -104,8 +104,8 @@ district.point.df= tibble::rownames_to_column(district.point.df, var = "id")
 url <-"ftp://ftp.chg.ucsb.edu/pub/org/chg/products/CHIRPS-2.0/global_daily/netcdf/p25/"
 
 filename <- getURL(url, ftp.use.epsv = FALSE, dirlistonly = TRUE)
-#filename <- strsplit(filename, "\r\n")
-filename <- strsplit(filename,"\n") # mac version 
+filename <- strsplit(filename, "\r\n")
+#filename <- strsplit(filename,"\n") # mac version 
 
 filenames <- unlist(filename)
 filenames
@@ -121,7 +121,7 @@ dir.create("data/chirps/nc_global") # comment out if the folder already exists
 
 for (filename in filenames) {
   download.file(paste(url, filename, sep = ""),
-                paste(getwd(), "/data/chirps/", filename, sep = ""),method='curl')
+                paste(getwd(), "/data/chirps/nc_global/", filename, sep = ""),method='curl')
 }
 
 # 
@@ -300,7 +300,7 @@ url <-"ftp://ftp.cdc.noaa.gov/Datasets/ghcncams/air.mon.mean.nc"
 # if you prefer udel data, use this link
 # url = "ftp://ftp.cdc.noaa.gov/Datasets/udel.airt.precip/air.mon.mean.v401.nc"
 
-download.file(url,paste(getwd(), "/data/GHCN/","air.mon.mean.nc",sep = ""))
+download.file(url,paste(getwd(), "/data/GHCN/","air.mon.mean.nc",sep = ""),method="curl")
 
 # Read in the nc data
 temp_nc <-nc_open("data/GHCN/air.mon.mean.nc")
