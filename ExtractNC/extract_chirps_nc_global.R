@@ -104,8 +104,8 @@ district.point.df= tibble::rownames_to_column(district.point.df, var = "id")
 url <-"ftp://ftp.chg.ucsb.edu/pub/org/chg/products/CHIRPS-2.0/global_daily/netcdf/p25/"
 
 filename <- getURL(url, ftp.use.epsv = FALSE, dirlistonly = TRUE)
-#filename <- strsplit(filename, "\r\n")
-filename <- strsplit(filename,"\n") # mac version 
+filename <- strsplit(filename, "\r\n")
+#filename <- strsplit(filename,"\n") # mac version 
 
 filenames <- unlist(filename)
 filenames
@@ -121,7 +121,7 @@ dir.create("data/chirps/nc_global") # comment out if the folder already exists
 
 for (filename in filenames) {
   download.file(paste(url, filename, sep = ""),
-                paste(getwd(), "/data/chirps/", filename, sep = ""),method='curl')
+                paste(getwd(), "/data/chirps/nc_global/", filename, sep = ""),method='curl')
 }
 
 # 
