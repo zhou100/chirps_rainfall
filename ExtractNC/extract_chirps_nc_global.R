@@ -65,18 +65,18 @@ library(rgeos)
 ########################################################################################################
 
 # read in the point from QGIS that generate random points in the polygon
-district.point.shape <- readOGR(dsn = "shapefiles/Philippines/phl_points_adm3/phl_points_adm3.shp", layer = "phl_points_adm3")
+district.point.shape <- readOGR(dsn = "shapefiles/Tanzania/tz_buffer.shp", layer = "tz_buffer")
 
 
 district.point.df= as.data.frame(district.point.shape)  # make the point shapefile to table
 
 head(district.point.df)  # view the columns
-
 # select lat and lons, as well as the district/province information; depending on the level of aggregation you want. 
-district.point.df= district.point.df  %>% dplyr::select (xcoord, ycoord,ADM2_EN) 
+district.point.df= district.point.df  %>% dplyr::select (lat_modifi, lon_modifi,ea_id) 
+colnames(district.point.df)
 
 # rename the columns
-colnames(district.point.df)=c("lon","lat","province_name")
+colnames(district.point.df)=c("lat","lon","ea_id")
 
 # add point id
 district.point.df= tibble::rownames_to_column(district.point.df, var = "id")
@@ -91,7 +91,7 @@ district.point.df= tibble::rownames_to_column(district.point.df, var = "id")
 # district.point.df$lat = round(district.point.df$lat,3)
 
 # Plot to see if the point is right.
-# plot(district.point.shape)
+ # plot(district.point.shape)
 
 
 
@@ -149,11 +149,10 @@ prec_list = list()
 
  
 
-start.year = 1981
+start.year = 2007
 end.year = 2018
 
-
-for(year in start.year:end.year){
+ for(year in start.year:end.year){
   
   ##############################################################################
   # read in the nc weather data for a given year 
@@ -162,8 +161,10 @@ for(year in start.year:end.year){
   start_time <- Sys.time()
   
   # Read in the nc data
-  prec_nc <-nc_open(paste0("data/chirps/nc_global/chirps-v2.0.",year,".days_p25.nc"))
+ # prec_nc <-nc_open(paste0("data/chirps/nc_global/chirps-v2.0.",year,".days_p25.nc"))
 
+  prec_nc <-nc_open(paste0("D:/nc_global/0818/chirps-v2.0.",year,".days_p25.nc"))
+  
   # save information into separate data frames 
   lat_prec <-ncdf4::ncvar_get(prec_nc, varid="latitude")
   lon_prec <- ncdf4::ncvar_get(prec_nc, varid="longitude")
@@ -230,19 +231,19 @@ for(year in start.year:end.year){
    # join the original point data frame to have the district information 
    prec.district =  dplyr::inner_join(district.point.df,prec.df.point.transpose,by="id") %>% 
                     
-     dplyr::group_by(province_name) %>%  # aggregate by district
+     dplyr::group_by(ea_id) %>%  # aggregate by district
      
      dplyr::select(-id,-lat,-lon) %>% 
                     
                     summarise_all(funs(mean(.,na.rm=TRUE))) # average of all the points in the same district
    
    # reshape and ready for join 
-   district.names <- as.character(prec.district$province_name)
+   district.names <- as.character(prec.district$ea_id)
    prec.district.date = as.data.frame(t(prec.district[,-1]))
    rownames(prec.district.date) <- NULL
    colnames(prec.district.date) <- district.names
   
-   
+#   colnames(district.point.df)
    
    ##############################################################################
    # Formatting the date variable and add as a column into the extracted weather data
@@ -277,13 +278,13 @@ for(year in start.year:end.year){
 
 
 # reorder to make date as the first column
-extracted.prec = extracted.prec %>% dplyr::select(date,everything())
+tz.prec = extracted.prec %>% dplyr::select(date,everything())
 
 # head(extracted.prec)
 
 # save data and clean the memory 
 dir.create("data/clean")
-save(extracted.prec,file="data/clean/phil_rain_8018.rda")
+save(tz.prec,file="data/clean/tz_rain_0818.rda")
 prec_data<-NULL
 
 
@@ -377,14 +378,14 @@ tmean_list = list()
   # join the original point data frame to have the district information 
   tmean.district =  dplyr::inner_join(district.point.df,tmean.df.point.transpose,by="id") %>% 
     
-    group_by(province_name) %>%  # aggregate by district
+    group_by(ea_id) %>%  # aggregate by district
     
     dplyr::select(-id,-lat,-lon) %>% 
     
     summarise_all(funs(mean(.,na.rm=TRUE))) # average of all the points in the same district
   
   # reshape and ready for join 
-  district.names <- as.character(tmean.district$province_name)
+  district.names <- as.character(tmean.district$ea_id)
   tmean.district.date = as.data.frame(t(tmean.district[,-1]))
   rownames(tmean.district.date) <- NULL
   colnames(tmean.district.date) <- district.names
